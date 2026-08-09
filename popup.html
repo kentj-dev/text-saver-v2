@@ -17,21 +17,19 @@
           </div>
           <div class="header-right">
             <span id="save-status" class="save-status" role="status"></span>
+            <button id="theme-toggle" class="header-action theme-toggle" type="button"
+              title="Switch to light mode" aria-label="Switch to light mode" aria-pressed="false">
+              <img id="theme-icon" class="icon" src="static/svgs/sun.svg" alt="" aria-hidden="true" />
+            </button>
             <div id="header-actions" class="header-actions">
-              <button
-                id="protect-tab"
-                class="header-action"
-                type="button"
-                title="Set password"
-                aria-label="Set password"
-              >
-                &#128272;
+              <button id="protect-tab" class="header-action" type="button" title="Set password" aria-label="Set password">
+                <img id="protect-tab-icon" class="icon" src="static/svgs/lock.svg" alt="" aria-hidden="true" />
               </button>
               <button id="rename-tab" class="header-action" type="button" title="Rename tab" aria-label="Rename tab">
-                ⚙️
+                <img class="icon" src="static/svgs/settings.svg" alt="" aria-hidden="true" />
               </button>
               <button id="delete-tab" class="header-action" type="button" title="Delete tab" aria-label="Delete tab">
-                🗑️
+                <img class="icon" src="static/svgs/trash.svg" alt="" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -42,17 +40,16 @@
         </div>
         <div class="editor-wrapper">
           <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
-          <textarea
-            id="formats"
-            class="main-textarea"
-            maxlength="200000"
-            placeholder="Write something great today..."
-          ></textarea>
+          <textarea id="formats" class="main-textarea" maxlength="200000"
+            placeholder="Write something great today..."></textarea>
           <div id="locked-state" class="locked-state" hidden>
-            <div class="locked-icon" aria-hidden="true">&#128274;</div>
+            <img class="locked-icon" src="static/svgs/lock.svg" alt="" aria-hidden="true" />
             <div class="locked-title">This tab is locked</div>
             <div class="locked-actions">
-              <button id="unlock-tab" class="modal-button modal-button-primary" type="button">🔓 Unlock</button>
+              <button id="unlock-tab" class="modal-button modal-button-primary" type="button">
+                <img class="icon" src="static/svgs/unlock.svg" alt="" aria-hidden="true" />
+                Unlock
+              </button>
               <button id="reset-tab" class="modal-button" type="button">Forgot password</button>
             </div>
           </div>
@@ -60,27 +57,27 @@
         <div class="bottom-bar">
           <div class="text-stats" aria-live="polite">
             <span><span id="word-number">0</span> words</span>
-            <span class="stat-separator">·</span>
+            <span class="stat-separator">&middot;</span>
             <span><span id="text-number">0</span> characters</span>
-            <span class="stat-separator">·</span>
+            <span class="stat-separator">&middot;</span>
             <span><span id="line-number">0</span> lines</span>
           </div>
           <div class="bottom-actions">
-            <button class="button" value="save" type="button" id="save">Download</button>
-            <button class="button" type="button" id="copy">Copy</button>
+            <button class="button" value="save" type="button" id="save">
+              <img class="icon" src="static/svgs/download.svg" alt="" aria-hidden="true" />
+              Download
+            </button>
+            <button class="button" type="button" id="copy">
+              <img class="icon" src="static/svgs/copy.svg" alt="" aria-hidden="true" />
+              Copy
+            </button>
           </div>
         </div>
       </div>
     </main>
     <div id="modal-backdrop" class="modal-backdrop" hidden>
-      <section
-        id="modal"
-        class="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        aria-describedby="modal-message"
-      >
+      <section id="modal" class="modal" role="dialog" aria-modal="true"
+        aria-labelledby="modal-title" aria-describedby="modal-message">
         <h2 id="modal-title" class="modal-title"></h2>
         <p id="modal-message" class="modal-message"></p>
         <label id="modal-input-label" class="modal-label" for="modal-input"></label>
@@ -95,6 +92,7 @@
         </div>
       </section>
     </div>
+    <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     <script defer type="module" src="static/js/popup.js"></script>
   </body>
 </html>

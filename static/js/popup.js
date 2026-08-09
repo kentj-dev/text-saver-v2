@@ -18,6 +18,7 @@ import {
 
 const AUTOSAVE_DELAY = 300;
 const MIN_PASSWORD_LENGTH = 8;
+const THEME_KEY = 'text_saver_theme';
 
 const textarea = document.getElementById('formats');
 const tabsContainer = document.getElementById('tabs');
@@ -28,8 +29,11 @@ const lineNumber = document.getElementById('line-number');
 const copyButton = document.getElementById('copy');
 const saveButton = document.getElementById('save');
 const saveStatus = document.getElementById('save-status');
+const themeToggle = document.getElementById('theme-toggle');
+const themeIcon = document.getElementById('theme-icon');
 const headerActions = document.getElementById('header-actions');
 const protectTabButton = document.getElementById('protect-tab');
+const protectTabIcon = document.getElementById('protect-tab-icon');
 const renameTabButton = document.getElementById('rename-tab');
 const deleteTabButton = document.getElementById('delete-tab');
 const lineNumbers = document.getElementById('line-numbers');
@@ -48,6 +52,7 @@ const modalError = document.getElementById('modal-error');
 const modalOptions = document.getElementById('modal-options');
 const modalCancel = document.getElementById('modal-cancel');
 const modalConfirm = document.getElementById('modal-confirm');
+const toast = document.getElementById('toast');
 
 let state;
 let saveTimer;
@@ -60,6 +65,48 @@ let modalReturnFocus;
 const unlockedKeys = new Map();
 const unlockedText = new Map();
 const lockTimers = new Map();
+let currentTheme = 'dark';
+let toastTimer;
+
+function showToast(message) {
+    clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.classList.add('visible');
+    toastTimer = setTimeout(() => {
+        toast.classList.remove('visible');
+    }, 1800);
+}
+
+function applyTheme(theme) {
+    currentTheme = theme === 'light' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = currentTheme;
+    const isLight = currentTheme === 'light';
+    themeIcon.src = isLight ? 'static/svgs/dark.svg' : 'static/svgs/sun.svg';
+    themeToggle.title = isLight ? 'Switch to dark mode' : 'Switch to light mode';
+    themeToggle.setAttribute('aria-label', themeToggle.title);
+    themeToggle.setAttribute('aria-pressed', String(isLight));
+}
+
+async function loadTheme() {
+    try {
+        const stored = await chrome.storage.local.get(THEME_KEY);
+        applyTheme(stored[THEME_KEY] === 'light' ? 'light' : 'dark');
+    } catch (error) {
+        applyTheme('dark');
+        console.error('Text Saver could not load the theme preference.', error);
+    }
+}
+
+async function toggleTheme() {
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(nextTheme);
+    try {
+        await chrome.storage.local.set({ [THEME_KEY]: nextTheme });
+    } catch (error) {
+        applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+        console.error('Text Saver could not save the theme preference.', error);
+    }
+}
 
 function getActiveTab() {
     return state.tabs.find((tab) => tab.id === state.activeTabId) || state.tabs[0];
@@ -203,8 +250,29 @@ function updateTextNumber() {
 }
 
 function updateLineNumbers() {
-    const lineCount = textarea.value.split('\n').length;
-    lineNumbers.textContent = Array.from({ length: lineCount }, (_value, index) => index + 1).join('\n');
+    const lines = textarea.value.split('\n');
+    lineNumbers.replaceChildren();
+    lines.forEach((line, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'line-copy';
+        button.title = `Copy line ${index + 1}`;
+        button.setAttribute('aria-label', `Copy line ${index + 1}`);
+
+        const number = document.createElement('span');
+        number.className = 'line-copy-number';
+        number.textContent = index + 1;
+
+        const icon = document.createElement('img');
+        icon.className = 'line-copy-icon';
+        icon.src = 'static/svgs/copy.svg';
+        icon.alt = '';
+        icon.setAttribute('aria-hidden', 'true');
+
+        button.append(number, icon);
+        button.addEventListener('click', () => copyLine(line, index + 1));
+        lineNumbers.append(button);
+    });
     lineNumbers.scrollTop = textarea.scrollTop;
 }
 
@@ -310,7 +378,17 @@ function renderTabs() {
         const select = document.createElement('button');
         select.type = 'button';
         select.className = 'tab-select';
-        select.textContent = `${isEncryptedTab(tab) ? '🔒 ' : ''}${tab.name}`;
+        if (isEncryptedTab(tab)) {
+            const lockIcon = document.createElement('img');
+            lockIcon.className = 'icon tab-icon';
+            lockIcon.src = 'static/svgs/lock.svg';
+            lockIcon.alt = '';
+            lockIcon.setAttribute('aria-hidden', 'true');
+            select.append(lockIcon);
+        }
+        const tabLabel = document.createElement('span');
+        tabLabel.textContent = tab.name;
+        select.append(tabLabel);
         select.title = tab.name;
         select.setAttribute('role', 'tab');
         select.setAttribute('aria-selected', String(tab.id === state.activeTabId));
@@ -327,7 +405,9 @@ function updateHeaderActions(normals = normalTabCount()) {
     const reserved = isInbox(tab);
     headerActions.hidden = reserved;
     if (reserved) return;
-    protectTabButton.textContent = isEncryptedTab(tab) ? (isUnlocked(tab) ? '🔒' : '🔓') : '🔐';
+    protectTabIcon.src = isEncryptedTab(tab) && !isUnlocked(tab)
+        ? 'static/svgs/unlock.svg'
+        : 'static/svgs/lock.svg';
     protectTabButton.title = isEncryptedTab(tab)
         ? (isUnlocked(tab) ? 'Password options' : 'Unlock tab')
         : 'Set password';
@@ -582,17 +662,36 @@ async function securityAction(tabId) {
     if (choice === 'remove') await removePassword(tab);
 }
 
+async function copyText(text, successMessage) {
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast(successMessage);
+    } catch (_error) {
+        const fallback = document.createElement('textarea');
+        fallback.value = text;
+        fallback.setAttribute('readonly', '');
+        fallback.style.position = 'fixed';
+        fallback.style.opacity = '0';
+        document.body.append(fallback);
+        fallback.select();
+        const copied = document.execCommand('copy');
+        fallback.remove();
+        if (copied) showToast(successMessage);
+    }
+}
+
+async function copyLine(text, lineIndex) {
+    const tab = getActiveTab();
+    if (isEncryptedTab(tab) && !isUnlocked(tab)) return;
+    if (isEncryptedTab(tab)) await touchUnlock(tab);
+    await copyText(text, `Line ${lineIndex} copied to clipboard`);
+}
+
 async function copyActiveText() {
     const tab = getActiveTab();
     if (isEncryptedTab(tab) && !isUnlocked(tab)) return;
     if (isEncryptedTab(tab)) await touchUnlock(tab);
-    try {
-        await navigator.clipboard.writeText(textarea.value);
-    } catch (_error) {
-        textarea.select();
-        document.execCommand('copy');
-        window.getSelection().removeAllRanges();
-    }
+    await copyText(textarea.value, 'Copied to clipboard');
 }
 
 async function downloadActiveText() {
@@ -631,6 +730,7 @@ textarea.addEventListener('scroll', () => { lineNumbers.scrollTop = textarea.scr
 addTabButton.addEventListener('click', addTab);
 copyButton.addEventListener('click', copyActiveText);
 saveButton.addEventListener('click', downloadActiveText);
+themeToggle.addEventListener('click', toggleTheme);
 protectTabButton.addEventListener('click', () => securityAction(getActiveTab().id));
 renameTabButton.addEventListener('click', () => renameTab(getActiveTab().id));
 deleteTabButton.addEventListener('click', () => deleteTab(getActiveTab().id));
@@ -650,6 +750,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        await loadTheme();
         state = await getOrMigrateState();
         await displayActiveTab();
         textarea.scrollTop = textarea.scrollHeight;
