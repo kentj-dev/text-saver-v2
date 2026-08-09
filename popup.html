@@ -9,39 +9,65 @@
   </head>
   <body>
     <main class="main-wrapper">
-      <div class="logo-wrapper">
-        <img src="images/128.png" alt="logo" class="logo" />
-      </div>
       <div class="content">
-        <div class="extension-info">Text Saver</div>
+        <header class="app-header">
+          <div class="brand">
+            <img src="images/128.png" alt="Text Saver logo" class="logo" />
+            <div class="extension-info">Text Saver</div>
+          </div>
+          <div class="header-right">
+            <span id="save-status" class="save-status" role="status"></span>
+            <div id="header-actions" class="header-actions">
+              <button
+                id="protect-tab"
+                class="header-action"
+                type="button"
+                title="Set password"
+                aria-label="Set password"
+              >
+                &#128272;
+              </button>
+              <button id="rename-tab" class="header-action" type="button" title="Rename tab" aria-label="Rename tab">
+                ⚙️
+              </button>
+              <button id="delete-tab" class="header-action" type="button" title="Delete tab" aria-label="Delete tab">
+                🗑️
+              </button>
+            </div>
+          </div>
+        </header>
         <div class="tabs-toolbar">
           <div id="tabs" class="tabs" role="tablist" aria-label="Saved text tabs"></div>
           <button id="add-tab" class="tab-add" type="button" title="Add tab" aria-label="Add tab">+</button>
         </div>
         <div class="editor-wrapper">
           <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
-          <textarea id="formats" class="main-textarea" maxlength="200000" placeholder="..."></textarea>
+          <textarea
+            id="formats"
+            class="main-textarea"
+            maxlength="200000"
+            placeholder="Write something great today..."
+          ></textarea>
           <div id="locked-state" class="locked-state" hidden>
             <div class="locked-icon" aria-hidden="true">&#128274;</div>
             <div class="locked-title">This tab is locked</div>
             <div class="locked-actions">
-              <button id="unlock-tab" class="modal-button modal-button-primary" type="button">Unlock</button>
+              <button id="unlock-tab" class="modal-button modal-button-primary" type="button">🔓 Unlock</button>
               <button id="reset-tab" class="modal-button" type="button">Forgot password</button>
             </div>
           </div>
         </div>
-        <div class="button-group">
-          <button class="button" type="button" id="copy">
-            <span>COPY TO CLIPBOARD</span>
-          </button>
-          <button class="button" value="save" type="button" id="save">
-            <span>SAVE AS TXT FILE</span>
-          </button>
-        </div>
-        <div class="footer">
-          <div class="text-number" id="text-number">0</div>
-          <div class="author">
-            <a href="https://kentjdev.vercel.app/" target="_blank" class="author-link"> Kent J. </a>
+        <div class="bottom-bar">
+          <div class="text-stats" aria-live="polite">
+            <span><span id="word-number">0</span> words</span>
+            <span class="stat-separator">·</span>
+            <span><span id="text-number">0</span> characters</span>
+            <span class="stat-separator">·</span>
+            <span><span id="line-number">0</span> lines</span>
+          </div>
+          <div class="bottom-actions">
+            <button class="button" value="save" type="button" id="save">Download</button>
+            <button class="button" type="button" id="copy">Copy</button>
           </div>
         </div>
       </div>

@@ -23,8 +23,15 @@ const textarea = document.getElementById('formats');
 const tabsContainer = document.getElementById('tabs');
 const addTabButton = document.getElementById('add-tab');
 const textNumber = document.getElementById('text-number');
+const wordNumber = document.getElementById('word-number');
+const lineNumber = document.getElementById('line-number');
 const copyButton = document.getElementById('copy');
 const saveButton = document.getElementById('save');
+const saveStatus = document.getElementById('save-status');
+const headerActions = document.getElementById('header-actions');
+const protectTabButton = document.getElementById('protect-tab');
+const renameTabButton = document.getElementById('rename-tab');
+const deleteTabButton = document.getElementById('delete-tab');
 const lineNumbers = document.getElementById('line-numbers');
 const lockedState = document.getElementById('locked-state');
 const unlockTabButton = document.getElementById('unlock-tab');
@@ -45,6 +52,8 @@ const modalConfirm = document.getElementById('modal-confirm');
 let state;
 let saveTimer;
 let saveQueue = Promise.resolve();
+let saveRevision = 0;
+let textEditPending = false;
 let modalResolver;
 let modalConfig;
 let modalReturnFocus;
@@ -185,7 +194,12 @@ tabsContainer.addEventListener('wheel', (event) => {
 }, { passive: false });
 
 function updateTextNumber() {
-    textNumber.textContent = textarea.value.length.toLocaleString('en-US');
+    const text = textarea.value;
+    const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const lineCount = text ? text.split('\n').length : 0;
+    wordNumber.textContent = wordCount.toLocaleString('en-US');
+    textNumber.textContent = text.length.toLocaleString('en-US');
+    lineNumber.textContent = lineCount.toLocaleString('en-US');
 }
 
 function updateLineNumbers() {
@@ -205,11 +219,23 @@ function setLockedEditor(locked) {
     updateLineNumbers();
 }
 
-function persistState() {
+function setSaveStatus(status) {
+    saveStatus.textContent = status === 'saving' ? 'Saving…' : status === 'error' ? 'Save failed' : '';
+    saveStatus.className = `save-status${status === 'saved' ? '' : ` ${status}`}`;
+}
+
+function persistState(showSavingStatus = false) {
     clearTimeout(saveTimer);
     const snapshot = structuredClone(state);
+    const revision = ++saveRevision;
+    if (showSavingStatus) setSaveStatus('saving');
     saveQueue = saveQueue.catch(() => undefined).then(() => saveState(snapshot));
-    return saveQueue;
+    return saveQueue.then(() => {
+        if (showSavingStatus && revision === saveRevision) setSaveStatus('saved');
+    }).catch((error) => {
+        if (revision === saveRevision) setSaveStatus('error');
+        throw error;
+    });
 }
 
 async function touchUnlock(tab) {
@@ -225,6 +251,7 @@ async function touchUnlock(tab) {
 async function flushEditor() {
     const tab = getActiveTab();
     if (!tab || (isEncryptedTab(tab) && !isUnlocked(tab))) return persistState();
+    const showSavingStatus = textEditPending;
     if (isEncryptedTab(tab)) {
         const keyBytes = unlockedKeys.get(tab.id);
         const payload = await encryptText(textarea.value, tab.id, keyBytes, base64ToBytes(tab.salt));
@@ -233,7 +260,8 @@ async function flushEditor() {
     } else {
         tab.text = textarea.value;
     }
-    return persistState();
+    textEditPending = false;
+    return persistState(showSavingStatus);
 }
 
 function scheduleSave() {
@@ -287,41 +315,28 @@ function renderTabs() {
         select.setAttribute('role', 'tab');
         select.setAttribute('aria-selected', String(tab.id === state.activeTabId));
         select.addEventListener('click', () => switchTab(tab.id));
-        if (!isInbox(tab)) select.addEventListener('dblclick', () => renameTab(tab.id));
         wrapper.append(select);
-
-        if (!isInbox(tab)) {
-            const security = document.createElement('button');
-            security.type = 'button';
-            security.className = 'tab-action';
-            security.textContent = isEncryptedTab(tab) ? (isUnlocked(tab) ? '●' : '○') : '◇';
-            security.title = isEncryptedTab(tab)
-                ? (isUnlocked(tab) ? 'Password options' : 'Unlock tab')
-                : 'Set password';
-            security.setAttribute('aria-label', security.title);
-            security.addEventListener('click', () => securityAction(tab.id));
-
-            const rename = document.createElement('button');
-            rename.type = 'button';
-            rename.className = 'tab-action';
-            rename.textContent = '✎';
-            rename.title = `Rename ${tab.name}`;
-            rename.setAttribute('aria-label', rename.title);
-            rename.addEventListener('click', () => renameTab(tab.id));
-
-            const remove = document.createElement('button');
-            remove.type = 'button';
-            remove.className = 'tab-action';
-            remove.textContent = '×';
-            remove.title = `Delete ${tab.name}`;
-            remove.setAttribute('aria-label', remove.title);
-            remove.disabled = normals === 1;
-            remove.addEventListener('click', () => deleteTab(tab.id));
-            wrapper.append(security, rename, remove);
-        }
         tabsContainer.append(wrapper);
     });
     addTabButton.disabled = normalTabCount() >= MAX_USER_TABS;
+    updateHeaderActions(normals);
+}
+
+function updateHeaderActions(normals = normalTabCount()) {
+    const tab = getActiveTab();
+    const reserved = isInbox(tab);
+    headerActions.hidden = reserved;
+    if (reserved) return;
+    protectTabButton.textContent = isEncryptedTab(tab) ? (isUnlocked(tab) ? '🔒' : '🔓') : '🔐';
+    protectTabButton.title = isEncryptedTab(tab)
+        ? (isUnlocked(tab) ? 'Password options' : 'Unlock tab')
+        : 'Set password';
+    protectTabButton.setAttribute('aria-label', protectTabButton.title);
+    renameTabButton.title = `Rename ${tab.name}`;
+    renameTabButton.setAttribute('aria-label', renameTabButton.title);
+    deleteTabButton.title = `Delete ${tab.name}`;
+    deleteTabButton.setAttribute('aria-label', deleteTabButton.title);
+    deleteTabButton.disabled = normals === 1;
 }
 
 async function switchTab(tabId) {
@@ -605,6 +620,9 @@ textarea.addEventListener('input', () => {
     } else {
         tab.text = textarea.value;
     }
+    textEditPending = true;
+    saveRevision += 1;
+    setSaveStatus('saving');
     updateTextNumber();
     updateLineNumbers();
     scheduleSave();
@@ -613,6 +631,9 @@ textarea.addEventListener('scroll', () => { lineNumbers.scrollTop = textarea.scr
 addTabButton.addEventListener('click', addTab);
 copyButton.addEventListener('click', copyActiveText);
 saveButton.addEventListener('click', downloadActiveText);
+protectTabButton.addEventListener('click', () => securityAction(getActiveTab().id));
+renameTabButton.addEventListener('click', () => renameTab(getActiveTab().id));
+deleteTabButton.addEventListener('click', () => deleteTab(getActiveTab().id));
 unlockTabButton.addEventListener('click', () => unlockTab(getActiveTab().id));
 resetTabButton.addEventListener('click', () => resetProtectedTab(getActiveTab().id));
 window.addEventListener('blur', () => flushEditor().catch(console.error));
@@ -634,6 +655,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         textarea.scrollTop = textarea.scrollHeight;
     } catch (error) {
         console.error('Text Saver could not load saved data.', error);
+        setSaveStatus('error');
         textarea.disabled = true;
     }
 });
