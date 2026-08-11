@@ -32,6 +32,17 @@
                 <img class="icon" src="static/svgs/trash.svg" alt="" aria-hidden="true" />
               </button>
             </div>
+            <div id="overflow-wrapper" class="overflow-wrapper">
+              <button id="overflow-toggle" class="header-action" type="button" title="More options"
+                aria-label="More options" aria-haspopup="menu" aria-expanded="false">
+                <img class="icon" src="static/svgs/ellipses.svg" alt="" aria-hidden="true" />
+              </button>
+              <div id="overflow-menu" class="overflow-menu" role="menu" hidden>
+                <button id="export-backup" class="overflow-item" type="button" role="menuitem">Export backup</button>
+                <button id="import-backup" class="overflow-item" type="button" role="menuitem">Import backup</button>
+              </div>
+            </div>
+            <input id="backup-file" type="file" accept="application/json,.json" hidden />
           </div>
         </header>
         <div class="tabs-toolbar">
@@ -40,7 +51,7 @@
         </div>
         <div class="editor-wrapper">
           <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
-          <textarea id="formats" class="main-textarea" maxlength="200000"
+          <textarea id="formats" class="main-textarea"
             placeholder="Write something great today..."></textarea>
           <div id="locked-state" class="locked-state" hidden>
             <img class="locked-icon" src="static/svgs/lock.svg" alt="" aria-hidden="true" />

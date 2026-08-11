@@ -13,12 +13,18 @@ import {
     getOrMigrateState,
     isEncryptedTab,
     isInbox,
+    isValidState,
     saveState
 } from './storage.js';
+import { DEFAULT_PLAN_ID, getPlanLimits } from './plans.js';
 
 const AUTOSAVE_DELAY = 300;
 const MIN_PASSWORD_LENGTH = 8;
 const THEME_KEY = 'text_saver_theme';
+const BACKUP_FORMAT = 'text-saver-backup';
+const BACKUP_VERSION = 1;
+const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+const activePlan = getPlanLimits(DEFAULT_PLAN_ID);
 
 const textarea = document.getElementById('formats');
 const tabsContainer = document.getElementById('tabs');
@@ -36,6 +42,11 @@ const protectTabButton = document.getElementById('protect-tab');
 const protectTabIcon = document.getElementById('protect-tab-icon');
 const renameTabButton = document.getElementById('rename-tab');
 const deleteTabButton = document.getElementById('delete-tab');
+const overflowToggle = document.getElementById('overflow-toggle');
+const overflowMenu = document.getElementById('overflow-menu');
+const exportBackupButton = document.getElementById('export-backup');
+const importBackupButton = document.getElementById('import-backup');
+const backupFileInput = document.getElementById('backup-file');
 const lineNumbers = document.getElementById('line-numbers');
 const lockedState = document.getElementById('locked-state');
 const unlockTabButton = document.getElementById('unlock-tab');
@@ -67,6 +78,8 @@ const unlockedText = new Map();
 const lockTimers = new Map();
 let currentTheme = 'dark';
 let toastTimer;
+
+textarea.maxLength = activePlan.maxCharactersPerTab;
 
 function showToast(message) {
     clearTimeout(toastTimer);
@@ -249,8 +262,68 @@ function updateTextNumber() {
     lineNumber.textContent = lineCount.toLocaleString('en-US');
 }
 
+function textAfterInsertion(insertedText) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    return textarea.value.slice(0, start) + insertedText + textarea.value.slice(end);
+}
+
+function insertionLimitMessage(insertedText) {
+    const nextText = textAfterInsertion(insertedText);
+    if (nextText.length > activePlan.maxCharactersPerTab) {
+        return `Maximum ${activePlan.maxCharactersPerTab.toLocaleString('en-US')} characters per tab`;
+    }
+    const nextLineCount = nextText ? nextText.split('\n').length : 0;
+    if (nextLineCount > activePlan.maxLinesPerTab) {
+        return `Maximum ${activePlan.maxLinesPerTab.toLocaleString('en-US')} lines per tab`;
+    }
+    return null;
+}
+
+function measureWrappedLineHeights(lines) {
+    const styles = getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(styles.lineHeight) || 18;
+    if (!textarea.clientWidth) return lines.map(() => lineHeight);
+
+    const mirror = document.createElement('div');
+    Object.assign(mirror.style, {
+        position: 'fixed',
+        left: '-10000px',
+        top: '0',
+        visibility: 'hidden',
+        pointerEvents: 'none',
+        width: `${textarea.clientWidth}px`,
+        padding: styles.padding,
+        border: '0',
+        boxSizing: 'border-box',
+        fontFamily: styles.fontFamily,
+        fontSize: styles.fontSize,
+        fontWeight: styles.fontWeight,
+        fontStyle: styles.fontStyle,
+        letterSpacing: styles.letterSpacing,
+        lineHeight: styles.lineHeight,
+        whiteSpace: 'pre-wrap',
+        overflowWrap: 'break-word',
+        wordBreak: styles.wordBreak
+    });
+
+    const spans = lines.map((line) => {
+        const span = document.createElement('span');
+        span.style.display = 'block';
+        span.style.minHeight = `${lineHeight}px`;
+        span.textContent = line || '\u200b';
+        mirror.append(span);
+        return span;
+    });
+    document.body.append(mirror);
+    const heights = spans.map((span) => Math.max(lineHeight, span.getBoundingClientRect().height));
+    mirror.remove();
+    return heights;
+}
+
 function updateLineNumbers() {
     const lines = textarea.value.split('\n');
+    const lineHeights = measureWrappedLineHeights(lines);
     lineNumbers.replaceChildren();
     lines.forEach((line, index) => {
         const button = document.createElement('button');
@@ -258,6 +331,8 @@ function updateLineNumbers() {
         button.className = 'line-copy';
         button.title = `Copy line ${index + 1}`;
         button.setAttribute('aria-label', `Copy line ${index + 1}`);
+        button.style.flexBasis = `${lineHeights[index]}px`;
+        button.style.height = `${lineHeights[index]}px`;
 
         const number = document.createElement('span');
         number.className = 'line-copy-number';
@@ -662,6 +737,118 @@ async function securityAction(tabId) {
     if (choice === 'remove') await removePassword(tab);
 }
 
+function closeOverflowMenu({ returnFocus = false } = {}) {
+    if (overflowMenu.hidden) return;
+    overflowMenu.hidden = true;
+    overflowToggle.setAttribute('aria-expanded', 'false');
+    if (returnFocus) overflowToggle.focus();
+}
+
+function toggleOverflowMenu() {
+    const opening = overflowMenu.hidden;
+    overflowMenu.hidden = !opening;
+    overflowToggle.setAttribute('aria-expanded', String(opening));
+    if (opening) exportBackupButton.focus();
+}
+
+async function exportBackup() {
+    closeOverflowMenu();
+    await flushEditor();
+    const backup = {
+        format: BACKUP_FORMAT,
+        version: BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        state: structuredClone(state)
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `text-saver-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Backup exported');
+}
+
+function isValidBackup(backup) {
+    return backup
+        && backup.format === BACKUP_FORMAT
+        && backup.version === BACKUP_VERSION
+        && isValidState(backup.state);
+}
+
+async function clearRuntimeUnlocks(tabIds) {
+    tabIds.forEach((tabId) => clearTimeout(lockTimers.get(tabId)));
+    lockTimers.clear();
+    unlockedKeys.clear();
+    unlockedText.clear();
+    await Promise.all([...tabIds].map((tabId) => clearUnlockKey(tabId)));
+}
+
+async function importBackupFile(file) {
+    if (!file) return;
+    if (file.size > MAX_BACKUP_BYTES) {
+        showToast('Backup is too large');
+        return;
+    }
+
+    let backup;
+    try {
+        backup = JSON.parse(await file.text());
+    } catch (_error) {
+        showToast('Could not read this backup');
+        return;
+    }
+    if (!isValidBackup(backup)) {
+        showToast('Invalid or unsupported backup');
+        return;
+    }
+
+    const importedTabs = backup.state.tabs.filter((tab) => !isInbox(tab));
+    const choice = await openModal({
+        title: 'Import backup',
+        message: `This backup contains ${importedTabs.length} saved ${importedTabs.length === 1 ? 'tab' : 'tabs'}. Merge it with this device or replace all current tabs.`,
+        options: [
+            { label: 'Merge with current tabs', value: 'merge' },
+            { label: 'Replace current tabs', value: 'replace' }
+        ]
+    });
+    if (!choice) return;
+
+    await flushEditor();
+    let nextState;
+    let importedCount = importedTabs.length;
+    if (choice === 'replace') {
+        nextState = structuredClone(backup.state);
+    } else {
+        const existingIds = new Set(state.tabs.map((tab) => tab.id));
+        const availableSlots = MAX_USER_TABS - normalTabCount();
+        const additions = importedTabs
+            .filter((tab) => !existingIds.has(tab.id))
+            .slice(0, availableSlots)
+            .map((tab) => structuredClone(tab));
+        importedCount = additions.length;
+        if (!importedCount) {
+            showToast(availableSlots ? 'These tabs are already imported' : 'Tab limit reached');
+            return;
+        }
+        nextState = structuredClone(state);
+        const inboxIndex = nextState.tabs.findIndex(isInbox);
+        nextState.tabs.splice(inboxIndex, 0, ...additions);
+    }
+
+    const affectedIds = new Set([
+        ...state.tabs.map((tab) => tab.id),
+        ...nextState.tabs.map((tab) => tab.id)
+    ]);
+    await clearRuntimeUnlocks(affectedIds);
+    state = nextState;
+    textEditPending = false;
+    await persistState();
+    await displayActiveTab();
+    showToast(choice === 'replace' ? 'Backup restored' : `${importedCount} ${importedCount === 1 ? 'tab' : 'tabs'} imported`);
+}
+
 async function copyText(text, successMessage) {
     try {
         await navigator.clipboard.writeText(text);
@@ -711,6 +898,25 @@ async function downloadActiveText() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+textarea.addEventListener('beforeinput', (event) => {
+    if (!event.inputType.startsWith('insert')) return;
+    let insertedText = event.dataTransfer?.getData('text/plain');
+    if (insertedText === undefined || insertedText === null) insertedText = event.data;
+    if (event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph') insertedText = '\n';
+    if (typeof insertedText !== 'string') return;
+    const limitMessage = insertionLimitMessage(insertedText);
+    if (!limitMessage) return;
+    event.preventDefault();
+    showToast(limitMessage);
+});
+textarea.addEventListener('paste', (event) => {
+    const pastedText = event.clipboardData?.getData('text/plain');
+    if (typeof pastedText !== 'string') return;
+    const limitMessage = insertionLimitMessage(pastedText);
+    if (!limitMessage) return;
+    event.preventDefault();
+    showToast(limitMessage);
+});
 textarea.addEventListener('input', () => {
     const tab = getActiveTab();
     if (isEncryptedTab(tab)) {
@@ -734,6 +940,34 @@ themeToggle.addEventListener('click', toggleTheme);
 protectTabButton.addEventListener('click', () => securityAction(getActiveTab().id));
 renameTabButton.addEventListener('click', () => renameTab(getActiveTab().id));
 deleteTabButton.addEventListener('click', () => deleteTab(getActiveTab().id));
+overflowToggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleOverflowMenu();
+});
+overflowMenu.addEventListener('click', (event) => event.stopPropagation());
+exportBackupButton.addEventListener('click', () => exportBackup().catch((error) => {
+    console.error('Text Saver could not export the backup.', error);
+    showToast('Export failed');
+}));
+importBackupButton.addEventListener('click', () => {
+    closeOverflowMenu();
+    backupFileInput.click();
+});
+backupFileInput.addEventListener('change', () => {
+    const [file] = backupFileInput.files;
+    backupFileInput.value = '';
+    importBackupFile(file).catch((error) => {
+        console.error('Text Saver could not import the backup.', error);
+        showToast('Import failed');
+    });
+});
+document.addEventListener('click', () => closeOverflowMenu());
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !overflowMenu.hidden) {
+        event.preventDefault();
+        closeOverflowMenu({ returnFocus: true });
+    }
+});
 unlockTabButton.addEventListener('click', () => unlockTab(getActiveTab().id));
 resetTabButton.addEventListener('click', () => resetProtectedTab(getActiveTab().id));
 window.addEventListener('blur', () => flushEditor().catch(console.error));
@@ -754,6 +988,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         state = await getOrMigrateState();
         await displayActiveTab();
         textarea.scrollTop = textarea.scrollHeight;
+        document.fonts?.ready.then(() => updateLineNumbers());
     } catch (error) {
         console.error('Text Saver could not load saved data.', error);
         setSaveStatus('error');
