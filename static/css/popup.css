@@ -19,6 +19,7 @@
   --inbox-border: #59451f;
   --focus-border: #666;
   --scrollbar: #323232;
+  --scrollbar-hover: #555;
   --overlay: rgba(0, 0, 0, 0.72);
   --modal-shadow: rgba(0, 0, 0, 0.6);
   --selection: #315f87;
@@ -46,6 +47,7 @@
   --inbox-border: #c78a18;
   --focus-border: #777;
   --scrollbar: #aaa8a1;
+  --scrollbar-hover: #88857f;
   --overlay: rgba(35, 35, 35, 0.35);
   --modal-shadow: rgba(40, 40, 40, 0.2);
   --selection: #b8d7ff;
@@ -53,8 +55,7 @@
 }
 
 ::-webkit-scrollbar {
-  height: 5px;
-  width: 5px;
+  width: 12px;
 }
 
 ::-webkit-scrollbar-track {
@@ -63,11 +64,12 @@
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar);
-  cursor: pointer;
+  background: var(--scrollbar-hover);
+  cursor: default;
 }
 
 @font-face {
@@ -159,8 +161,11 @@ body {
 }
 
 .overflow-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   border: 0;
   border-radius: 4px;
@@ -169,7 +174,16 @@ body {
   font-family: monsterrat;
   font-size: 12px;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
+}
+
+.overflow-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  filter: var(--icon-filter);
+  pointer-events: none;
 }
 
 .overflow-item:hover,
@@ -217,8 +231,8 @@ body {
 
 .main-wrapper {
   padding: 10px;
-  height: 420px;
-  width: 600px;
+  height: 550px;
+  width: 700px;
 }
 
 .content {
@@ -429,7 +443,9 @@ body {
   border-radius: 4px;
   background: transparent;
   color: var(--text-muted);
-  font: 16px Arial, sans-serif;
+  font:
+    16px Arial,
+    sans-serif;
   cursor: pointer;
 }
 

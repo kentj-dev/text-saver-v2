@@ -1,25 +1,20 @@
 {
-	"manifest_version": 3,
-	"name": "Text Saver",
-	"description": "A browser extension that lets you save your text directly, no more relying on Notepad while browsing!",
-	"version": "3.6",
-	"icons": {
-		"16": "/images/16.png",
-		"48": "/images/48.png",
-		"128": "/images/128.png"
-	},
-	"action": {
-		"default_popup": "popup.html",
-		"default_title": "Text Saver"
-	},
-	"background": {
-		"service_worker": "background.js",
-		"type": "module"
-	},
-	"permissions": [
-		"storage",
-		"unlimitedStorage",
-		"contextMenus",
-		"alarms"
-	]
+  "manifest_version": 3,
+  "name": "Text Saver",
+  "description": "A browser extension that lets you save your text directly, no more relying on Notepad while browsing!",
+  "version": "4.0.0",
+  "icons": {
+    "16": "/images/16.png",
+    "48": "/images/48.png",
+    "128": "/images/128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Text Saver"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["storage", "unlimitedStorage", "contextMenus", "alarms"]
 }

@@ -17,16 +17,27 @@
           </div>
           <div class="header-right">
             <span id="save-status" class="save-status" role="status"></span>
-            <button id="theme-toggle" class="header-action theme-toggle" type="button"
-              title="Switch to light mode" aria-label="Switch to light mode" aria-pressed="false">
+            <button
+              id="theme-toggle"
+              class="header-action theme-toggle"
+              type="button"
+              title="Switch to light mode"
+              aria-label="Switch to light mode"
+              aria-pressed="false"
+            >
               <img id="theme-icon" class="icon" src="static/svgs/sun.svg" alt="" aria-hidden="true" />
             </button>
-            <button id="find-in-tab" class="header-action" type="button" title="Find in tab"
-              aria-label="Find in tab">
+            <button id="find-in-tab" class="header-action" type="button" title="Find in tab" aria-label="Find in tab">
               <img class="icon" src="static/svgs/search.svg" alt="" aria-hidden="true" />
             </button>
             <div id="header-actions" class="header-actions">
-              <button id="protect-tab" class="header-action" type="button" title="Set password" aria-label="Set password">
+              <button
+                id="protect-tab"
+                class="header-action"
+                type="button"
+                title="Set password"
+                aria-label="Set password"
+              >
                 <img id="protect-tab-icon" class="icon" src="static/svgs/lock.svg" alt="" aria-hidden="true" />
               </button>
               <button id="rename-tab" class="header-action" type="button" title="Rename tab" aria-label="Rename tab">
@@ -37,13 +48,36 @@
               </button>
             </div>
             <div id="overflow-wrapper" class="overflow-wrapper">
-              <button id="overflow-toggle" class="header-action" type="button" title="More options"
-                aria-label="More options" aria-haspopup="menu" aria-expanded="false">
+              <button
+                id="overflow-toggle"
+                class="header-action"
+                type="button"
+                title="More options"
+                aria-label="More options"
+                aria-haspopup="menu"
+                aria-expanded="false"
+              >
                 <img class="icon" src="static/svgs/ellipses.svg" alt="" aria-hidden="true" />
               </button>
               <div id="overflow-menu" class="overflow-menu" role="menu" hidden>
-                <button id="export-backup" class="overflow-item" type="button" role="menuitem">Export backup</button>
-                <button id="import-backup" class="overflow-item" type="button" role="menuitem">Import backup</button>
+                <button id="export-backup" class="overflow-item" type="button" role="menuitem">
+                  <img class="overflow-icon" src="static/svgs/export.svg" alt="" aria-hidden="true" />
+                  Export backup
+                </button>
+                <button id="import-backup" class="overflow-item" type="button" role="menuitem">
+                  <img class="overflow-icon" src="static/svgs/import.svg" alt="" aria-hidden="true" />
+                  Import backup
+                </button>
+                <a
+                  class="overflow-item"
+                  href="https://bit.ly/4xDbvkk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  role="menuitem"
+                >
+                  <img class="overflow-icon" src="static/svgs/sparkle.svg" alt="" aria-hidden="true" />
+                  Developer
+                </a>
               </div>
             </div>
             <input id="backup-file" type="file" accept="application/json,.json" hidden />
@@ -55,18 +89,33 @@
         </div>
         <div class="editor-wrapper">
           <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
-          <textarea id="formats" class="main-textarea"
-            placeholder="Write something great today..."></textarea>
+          <textarea id="formats" class="main-textarea" placeholder="Write something great today..."></textarea>
           <div id="find-bar" class="find-bar" role="search" hidden>
-            <input id="find-input" class="find-input" type="search" maxlength="200"
-              placeholder="Find" aria-label="Find in current tab" autocomplete="off" />
+            <input
+              id="find-input"
+              class="find-input"
+              type="search"
+              maxlength="200"
+              placeholder="Find"
+              aria-label="Find in current tab"
+              autocomplete="off"
+            />
             <span id="find-count" class="find-count" aria-live="polite">0/0</span>
-            <button id="find-previous" class="find-action" type="button" title="Previous match"
-              aria-label="Previous match">&#8593;</button>
-            <button id="find-next" class="find-action" type="button" title="Next match"
-              aria-label="Next match">&#8595;</button>
-            <button id="find-close" class="find-action" type="button" title="Close search"
-              aria-label="Close search">&#215;</button>
+            <button
+              id="find-previous"
+              class="find-action"
+              type="button"
+              title="Previous match"
+              aria-label="Previous match"
+            >
+              &#8593;
+            </button>
+            <button id="find-next" class="find-action" type="button" title="Next match" aria-label="Next match">
+              &#8595;
+            </button>
+            <button id="find-close" class="find-action" type="button" title="Close search" aria-label="Close search">
+              &#215;
+            </button>
           </div>
           <div id="locked-state" class="locked-state" hidden>
             <img class="locked-icon" src="static/svgs/lock.svg" alt="" aria-hidden="true" />
@@ -102,8 +151,14 @@
       </div>
     </main>
     <div id="modal-backdrop" class="modal-backdrop" hidden>
-      <section id="modal" class="modal" role="dialog" aria-modal="true"
-        aria-labelledby="modal-title" aria-describedby="modal-message">
+      <section
+        id="modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        aria-describedby="modal-message"
+      >
         <h2 id="modal-title" class="modal-title"></h2>
         <p id="modal-message" class="modal-message"></p>
         <div id="modal-preview" class="modal-preview" hidden></div>
