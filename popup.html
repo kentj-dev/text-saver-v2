@@ -21,6 +21,10 @@
               title="Switch to light mode" aria-label="Switch to light mode" aria-pressed="false">
               <img id="theme-icon" class="icon" src="static/svgs/sun.svg" alt="" aria-hidden="true" />
             </button>
+            <button id="find-in-tab" class="header-action" type="button" title="Find in tab"
+              aria-label="Find in tab">
+              <img class="icon" src="static/svgs/search.svg" alt="" aria-hidden="true" />
+            </button>
             <div id="header-actions" class="header-actions">
               <button id="protect-tab" class="header-action" type="button" title="Set password" aria-label="Set password">
                 <img id="protect-tab-icon" class="icon" src="static/svgs/lock.svg" alt="" aria-hidden="true" />
@@ -53,6 +57,17 @@
           <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
           <textarea id="formats" class="main-textarea"
             placeholder="Write something great today..."></textarea>
+          <div id="find-bar" class="find-bar" role="search" hidden>
+            <input id="find-input" class="find-input" type="search" maxlength="200"
+              placeholder="Find" aria-label="Find in current tab" autocomplete="off" />
+            <span id="find-count" class="find-count" aria-live="polite">0/0</span>
+            <button id="find-previous" class="find-action" type="button" title="Previous match"
+              aria-label="Previous match">&#8593;</button>
+            <button id="find-next" class="find-action" type="button" title="Next match"
+              aria-label="Next match">&#8595;</button>
+            <button id="find-close" class="find-action" type="button" title="Close search"
+              aria-label="Close search">&#215;</button>
+          </div>
           <div id="locked-state" class="locked-state" hidden>
             <img class="locked-icon" src="static/svgs/lock.svg" alt="" aria-hidden="true" />
             <div class="locked-title">This tab is locked</div>
@@ -91,6 +106,7 @@
         aria-labelledby="modal-title" aria-describedby="modal-message">
         <h2 id="modal-title" class="modal-title"></h2>
         <p id="modal-message" class="modal-message"></p>
+        <div id="modal-preview" class="modal-preview" hidden></div>
         <label id="modal-input-label" class="modal-label" for="modal-input"></label>
         <input id="modal-input" class="modal-input" type="text" maxlength="80" autocomplete="off" />
         <label id="modal-input-two-label" class="modal-label" for="modal-input-two"></label>

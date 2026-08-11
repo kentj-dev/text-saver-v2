@@ -17,6 +17,7 @@ import {
     saveState
 } from './storage.js';
 import { DEFAULT_PLAN_ID, getPlanLimits } from './plans.js';
+import Sortable from './Sortable-1.15.7/modular/sortable.core.esm.js';
 
 const AUTOSAVE_DELAY = 300;
 const MIN_PASSWORD_LENGTH = 8;
@@ -24,6 +25,7 @@ const THEME_KEY = 'text_saver_theme';
 const BACKUP_FORMAT = 'text-saver-backup';
 const BACKUP_VERSION = 1;
 const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+const LIMIT_WARNING_RATIO = 0.9;
 const activePlan = getPlanLimits(DEFAULT_PLAN_ID);
 
 const textarea = document.getElementById('formats');
@@ -44,9 +46,16 @@ const renameTabButton = document.getElementById('rename-tab');
 const deleteTabButton = document.getElementById('delete-tab');
 const overflowToggle = document.getElementById('overflow-toggle');
 const overflowMenu = document.getElementById('overflow-menu');
+const findInTabButton = document.getElementById('find-in-tab');
 const exportBackupButton = document.getElementById('export-backup');
 const importBackupButton = document.getElementById('import-backup');
 const backupFileInput = document.getElementById('backup-file');
+const findBar = document.getElementById('find-bar');
+const findInput = document.getElementById('find-input');
+const findCount = document.getElementById('find-count');
+const findPreviousButton = document.getElementById('find-previous');
+const findNextButton = document.getElementById('find-next');
+const findCloseButton = document.getElementById('find-close');
 const lineNumbers = document.getElementById('line-numbers');
 const lockedState = document.getElementById('locked-state');
 const unlockTabButton = document.getElementById('unlock-tab');
@@ -60,6 +69,7 @@ const modalInputLabel = document.getElementById('modal-input-label');
 const modalInputTwo = document.getElementById('modal-input-two');
 const modalInputTwoLabel = document.getElementById('modal-input-two-label');
 const modalError = document.getElementById('modal-error');
+const modalPreview = document.getElementById('modal-preview');
 const modalOptions = document.getElementById('modal-options');
 const modalCancel = document.getElementById('modal-cancel');
 const modalConfirm = document.getElementById('modal-confirm');
@@ -76,8 +86,17 @@ let modalReturnFocus;
 const unlockedKeys = new Map();
 const unlockedText = new Map();
 const lockTimers = new Map();
+const limitWarnings = new Map();
 let currentTheme = 'dark';
 let toastTimer;
+let lineUpdateTimer;
+let lineScrollFrame;
+let lineLayout = [];
+let lineNumberSpacer;
+let tabsSortable;
+let searchMatches = [];
+let currentSearchIndex = -1;
+let searchSelectionActive = false;
 
 textarea.maxLength = activePlan.maxCharactersPerTab;
 
@@ -88,6 +107,91 @@ function showToast(message) {
     toastTimer = setTimeout(() => {
         toast.classList.remove('visible');
     }, 1800);
+}
+
+function updateFindControls() {
+    const hasMatches = searchMatches.length > 0;
+    findCount.textContent = hasMatches ? `${currentSearchIndex + 1}/${searchMatches.length}` : '0/0';
+    findPreviousButton.disabled = !hasMatches;
+    findNextButton.disabled = !hasMatches;
+}
+
+function selectSearchMatch() {
+    if (currentSearchIndex < 0 || !searchMatches.length) return;
+    const match = searchMatches[currentSearchIndex];
+    textarea.setSelectionRange(match.start, match.end);
+    textarea.focus();
+
+    const lineIndex = textarea.value.slice(0, match.start).split('\n').length - 1;
+    const matchedLine = lineLayout[lineIndex];
+    if (matchedLine) {
+        const centeredTop = matchedLine.top - ((textarea.clientHeight - matchedLine.height) / 2);
+        const maximumTop = Math.max(0, textarea.scrollHeight - textarea.clientHeight);
+        textarea.scrollTop = Math.max(0, Math.min(centeredTop, maximumTop));
+        lineNumbers.scrollTop = textarea.scrollTop;
+        renderVisibleLineNumbers();
+    }
+    searchSelectionActive = true;
+    updateFindControls();
+}
+
+function updateSearchResults(selectFirstMatch = false) {
+    searchMatches = [];
+    currentSearchIndex = -1;
+    searchSelectionActive = false;
+    const query = findInput.value;
+    if (!query) {
+        updateFindControls();
+        return;
+    }
+
+    const text = textarea.value.toLowerCase();
+    const normalizedQuery = query.toLowerCase();
+    let position = 0;
+    while (position <= text.length - normalizedQuery.length) {
+        const start = text.indexOf(normalizedQuery, position);
+        if (start < 0) break;
+        searchMatches.push({ start, end: start + query.length });
+        position = start + Math.max(1, normalizedQuery.length);
+    }
+    if (searchMatches.length) {
+        currentSearchIndex = 0;
+        if (selectFirstMatch) selectSearchMatch();
+        else updateFindControls();
+    } else {
+        updateFindControls();
+    }
+}
+
+function navigateSearch(direction) {
+    if (!searchMatches.length) return;
+    if (!searchSelectionActive) {
+        currentSearchIndex = direction < 0 ? searchMatches.length - 1 : 0;
+    } else {
+        currentSearchIndex = (currentSearchIndex + direction + searchMatches.length) % searchMatches.length;
+    }
+    selectSearchMatch();
+}
+
+function openFind() {
+    closeOverflowMenu();
+    if (!state || textarea.disabled) {
+        showToast('Unlock this tab to search');
+        return;
+    }
+    findBar.hidden = false;
+    findInput.focus();
+    findInput.select();
+    updateSearchResults();
+}
+
+function closeFind({ focusEditor = true } = {}) {
+    if (findBar.hidden) return;
+    findBar.hidden = true;
+    searchMatches = [];
+    currentSearchIndex = -1;
+    searchSelectionActive = false;
+    if (focusEditor && !textarea.disabled) textarea.focus();
 }
 
 function applyTheme(theme) {
@@ -161,6 +265,7 @@ function openModal({
     confirmLabel = 'Confirm',
     input,
     inputTwo,
+    preview,
     options,
     validate
 }) {
@@ -173,6 +278,29 @@ function openModal({
     modalError.textContent = '';
     configureInput(modalInput, modalInputLabel, input);
     configureInput(modalInputTwo, modalInputTwoLabel, inputTwo);
+    modalPreview.replaceChildren();
+    modalPreview.hidden = !preview?.length;
+    preview?.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'import-preview-row';
+
+        const main = document.createElement('div');
+        main.className = 'import-preview-main';
+        const name = document.createElement('div');
+        name.className = 'import-preview-name';
+        name.textContent = item.name;
+        name.title = item.name;
+        const details = document.createElement('div');
+        details.className = 'import-preview-details';
+        details.textContent = `${item.protected ? 'Protected' : 'Plain text'} · ${item.size}`;
+        main.append(name, details);
+
+        const status = document.createElement('div');
+        status.className = `import-preview-status${item.conflict ? ' conflict' : ''}`;
+        status.textContent = item.status;
+        row.append(main, status);
+        modalPreview.append(row);
+    });
     modalOptions.replaceChildren();
     modalOptions.hidden = !options;
     modalConfirm.hidden = Boolean(options);
@@ -183,6 +311,8 @@ function openModal({
             button.type = 'button';
             button.className = 'modal-button modal-option';
             button.textContent = option.label;
+            button.disabled = Boolean(option.disabled);
+            if (option.title) button.title = option.title;
             button.addEventListener('click', () => closeModal(option.value));
             modalOptions.append(button);
         });
@@ -271,19 +401,57 @@ function textAfterInsertion(insertedText) {
 function insertionLimitMessage(insertedText) {
     const nextText = textAfterInsertion(insertedText);
     if (nextText.length > activePlan.maxCharactersPerTab) {
-        return `Maximum ${activePlan.maxCharactersPerTab.toLocaleString('en-US')} characters per tab`;
+        return `Input blocked: this tab is limited to ${activePlan.maxCharactersPerTab.toLocaleString('en-US')} characters`;
     }
     const nextLineCount = nextText ? nextText.split('\n').length : 0;
     if (nextLineCount > activePlan.maxLinesPerTab) {
-        return `Maximum ${activePlan.maxLinesPerTab.toLocaleString('en-US')} lines per tab`;
+        return `Input blocked: this tab is limited to ${activePlan.maxLinesPerTab.toLocaleString('en-US')} lines`;
     }
     return null;
+}
+
+function showApproachingLimitWarning() {
+    const tab = getActiveTab();
+    if (!tab) return;
+    const text = textarea.value;
+    const lineCount = text ? text.split('\n').length : 0;
+    const record = limitWarnings.get(tab.id) || { characters: false, lines: false };
+    const nearCharacters = text.length >= activePlan.maxCharactersPerTab * LIMIT_WARNING_RATIO
+        && text.length < activePlan.maxCharactersPerTab;
+    const nearLines = lineCount >= activePlan.maxLinesPerTab * LIMIT_WARNING_RATIO
+        && lineCount < activePlan.maxLinesPerTab;
+    const warnings = [];
+
+    if (nearCharacters && !record.characters) {
+        warnings.push(`${(activePlan.maxCharactersPerTab - text.length).toLocaleString('en-US')} characters remaining`);
+    }
+    if (nearLines && !record.lines) {
+        warnings.push(`${(activePlan.maxLinesPerTab - lineCount).toLocaleString('en-US')} lines remaining`);
+    }
+    record.characters = nearCharacters;
+    record.lines = nearLines;
+    limitWarnings.set(tab.id, record);
+    if (warnings.length) showToast(`Approaching tab limit: ${warnings.join(', ')}`);
 }
 
 function measureWrappedLineHeights(lines) {
     const styles = getComputedStyle(textarea);
     const lineHeight = Number.parseFloat(styles.lineHeight) || 18;
     if (!textarea.clientWidth) return lines.map(() => lineHeight);
+
+    const heights = lines.map(() => lineHeight);
+    const padding = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
+    const availableWidth = Math.max(1, textarea.clientWidth - padding);
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    context.font = `${styles.fontStyle} ${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
+    const letterSpacing = Number.parseFloat(styles.letterSpacing) || 0;
+    const wrappedIndexes = [];
+    lines.forEach((line, index) => {
+        const width = context.measureText(line).width + Math.max(0, line.length - 1) * letterSpacing;
+        if (line.includes('\t') || width > availableWidth - 2) wrappedIndexes.push(index);
+    });
+    if (!wrappedIndexes.length) return heights;
 
     const mirror = document.createElement('div');
     Object.assign(mirror.style, {
@@ -307,36 +475,54 @@ function measureWrappedLineHeights(lines) {
         wordBreak: styles.wordBreak
     });
 
-    const spans = lines.map((line) => {
+    const spans = wrappedIndexes.map((index) => {
         const span = document.createElement('span');
         span.style.display = 'block';
         span.style.minHeight = `${lineHeight}px`;
-        span.textContent = line || '\u200b';
+        span.textContent = lines[index] || '\u200b';
         mirror.append(span);
         return span;
     });
     document.body.append(mirror);
-    const heights = spans.map((span) => Math.max(lineHeight, span.getBoundingClientRect().height));
+    spans.forEach((span, spanIndex) => {
+        heights[wrappedIndexes[spanIndex]] = Math.max(lineHeight, span.getBoundingClientRect().height);
+    });
     mirror.remove();
     return heights;
 }
 
-function updateLineNumbers() {
-    const lines = textarea.value.split('\n');
-    const lineHeights = measureWrappedLineHeights(lines);
-    lineNumbers.replaceChildren();
-    lines.forEach((line, index) => {
+function renderVisibleLineNumbers() {
+    if (!lineNumberSpacer) return;
+    const lastItem = lineLayout[lineLayout.length - 1];
+    const layoutHeight = lastItem ? lastItem.top + lastItem.height : 0;
+    const maximumLayoutTop = Math.max(0, layoutHeight - textarea.clientHeight);
+    const viewportTop = Math.min(textarea.scrollTop, maximumLayoutTop);
+    const viewportBottom = viewportTop + textarea.clientHeight;
+    const buffer = 72;
+    let low = 0;
+    let high = lineLayout.length;
+    while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        const item = lineLayout[middle];
+        if (item.top + item.height < viewportTop - buffer) low = middle + 1;
+        else high = middle;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (let index = low; index < lineLayout.length; index += 1) {
+        const item = lineLayout[index];
+        if (item.top > viewportBottom + buffer) break;
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'line-copy';
-        button.title = `Copy line ${index + 1}`;
-        button.setAttribute('aria-label', `Copy line ${index + 1}`);
-        button.style.flexBasis = `${lineHeights[index]}px`;
-        button.style.height = `${lineHeights[index]}px`;
+        button.title = `Copy line ${item.number}`;
+        button.setAttribute('aria-label', `Copy line ${item.number}`);
+        button.style.top = `${item.top}px`;
+        button.style.height = `${item.height}px`;
 
         const number = document.createElement('span');
         number.className = 'line-copy-number';
-        number.textContent = index + 1;
+        number.textContent = item.number;
 
         const icon = document.createElement('img');
         icon.className = 'line-copy-icon';
@@ -345,13 +531,78 @@ function updateLineNumbers() {
         icon.setAttribute('aria-hidden', 'true');
 
         button.append(number, icon);
-        button.addEventListener('click', () => copyLine(line, index + 1));
-        lineNumbers.append(button);
+        button.addEventListener('click', () => copyLine(item.text, item.number));
+        fragment.append(button);
+    }
+    lineNumberSpacer.replaceChildren(fragment);
+}
+
+function applyLineLayout(lines, lineHeights) {
+    let top = 0;
+    lineLayout = lines.map((line, index) => {
+        const item = { text: line, number: index + 1, top, height: lineHeights[index] };
+        top += lineHeights[index];
+        return item;
     });
+    lineNumberSpacer = document.createElement('div');
+    lineNumberSpacer.className = 'line-number-spacer';
+    lineNumberSpacer.style.height = `${top}px`;
+    lineNumbers.replaceChildren(lineNumberSpacer);
     lineNumbers.scrollTop = textarea.scrollTop;
+    renderVisibleLineNumbers();
+}
+
+function updateLineNumbers() {
+    clearTimeout(lineUpdateTimer);
+    const lines = textarea.value.split('\n');
+    applyLineLayout(lines, measureWrappedLineHeights(lines));
+}
+
+function updateLineNumbersImmediately() {
+    const lines = textarea.value.split('\n');
+    if (!lineLayout.length) {
+        applyLineLayout(lines, lines.map(() => 18));
+        return;
+    }
+
+    if (lines.length === lineLayout.length) {
+        lineLayout.forEach((item, index) => { item.text = lines[index]; });
+        renderVisibleLineNumbers();
+        return;
+    }
+
+    const oldLines = lineLayout.map((item) => item.text);
+    let prefixLength = 0;
+    while (prefixLength < oldLines.length
+        && prefixLength < lines.length
+        && oldLines[prefixLength] === lines[prefixLength]) {
+        prefixLength += 1;
+    }
+    let suffixLength = 0;
+    while (suffixLength < oldLines.length - prefixLength
+        && suffixLength < lines.length - prefixLength
+        && oldLines[oldLines.length - 1 - suffixLength] === lines[lines.length - 1 - suffixLength]) {
+        suffixLength += 1;
+    }
+
+    const provisionalHeights = lines.map((_line, index) => {
+        if (index < prefixLength) return lineLayout[index].height;
+        if (index >= lines.length - suffixLength) {
+            const oldIndex = oldLines.length - (lines.length - index);
+            return lineLayout[oldIndex].height;
+        }
+        return 18;
+    });
+    applyLineLayout(lines, provisionalHeights);
+}
+
+function scheduleLineNumberUpdate() {
+    clearTimeout(lineUpdateTimer);
+    lineUpdateTimer = setTimeout(updateLineNumbers, 120);
 }
 
 function setLockedEditor(locked) {
+    if (locked) closeFind({ focusEditor: false });
     lockedState.hidden = !locked;
     textarea.disabled = locked;
     lineNumbers.hidden = locked;
@@ -438,6 +689,7 @@ async function displayActiveTab() {
         textarea.value = isEncryptedTab(tab) ? unlockedText.get(tab.id) : tab.text;
         updateTextNumber();
         updateLineNumbers();
+        if (!findBar.hidden) updateSearchResults();
         if (isEncryptedTab(tab)) await touchUnlock(tab);
     }
     renderTabs();
@@ -449,6 +701,7 @@ function renderTabs() {
     state.tabs.forEach((tab) => {
         const wrapper = document.createElement('div');
         wrapper.className = `tab${tab.id === state.activeTabId ? ' active' : ''}${isInbox(tab) ? ' tab-inbox' : ''}`;
+        wrapper.dataset.tabId = tab.id;
 
         const select = document.createElement('button');
         select.type = 'button';
@@ -473,6 +726,38 @@ function renderTabs() {
     });
     addTabButton.disabled = normalTabCount() >= MAX_USER_TABS;
     updateHeaderActions(normals);
+}
+
+function initializeSortableTabs() {
+    if (tabsSortable) return;
+    tabsSortable = Sortable.create(tabsContainer, {
+        animation: 150,
+        draggable: '.tab',
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+        direction: 'horizontal',
+        delay: 80,
+        delayOnTouchOnly: true,
+        onEnd: async (event) => {
+            if (event.oldIndex === event.newIndex) return;
+            const orderedIds = [...tabsContainer.children].map((element) => element.dataset.tabId);
+            const tabsById = new Map(state.tabs.map((tab) => [tab.id, tab]));
+            const reorderedTabs = orderedIds.map((id) => tabsById.get(id)).filter(Boolean);
+            if (reorderedTabs.length !== state.tabs.length) {
+                renderTabs();
+                return;
+            }
+            try {
+                await flushEditor();
+                state.tabs = reorderedTabs;
+                await persistState();
+            } catch (error) {
+                console.error('Text Saver could not save the tab order.', error);
+                renderTabs();
+                showToast('Could not save tab order');
+            }
+        }
+    });
 }
 
 function updateHeaderActions(normals = normalTabCount()) {
@@ -785,6 +1070,47 @@ async function clearRuntimeUnlocks(tabIds) {
     await Promise.all([...tabIds].map((tabId) => clearUnlockKey(tabId)));
 }
 
+function formatByteSize(bytes) {
+    if (bytes < 1024) return `${bytes.toLocaleString('en-US')} bytes`;
+    return `${(bytes / 1024).toLocaleString('en-US', { maximumFractionDigits: 1 })} KB`;
+}
+
+function backupTabSize(tab) {
+    if (!isEncryptedTab(tab)) return `${tab.text.length.toLocaleString('en-US')} characters`;
+    const padding = tab.ciphertext.endsWith('==') ? 2 : tab.ciphertext.endsWith('=') ? 1 : 0;
+    const encryptedBytes = Math.max(0, Math.floor(tab.ciphertext.length * 3 / 4) - padding);
+    return `${formatByteSize(encryptedBytes)} encrypted`;
+}
+
+function buildImportPreview(backupState) {
+    const existingIds = new Set(state.tabs.map((tab) => tab.id));
+    const availableSlots = MAX_USER_TABS - normalTabCount();
+    let readyCount = 0;
+    const preview = backupState.tabs.map((tab) => {
+        let status = 'Ready';
+        let conflict = false;
+        if (isInbox(tab)) {
+            status = 'Replace only';
+        } else if (existingIds.has(tab.id)) {
+            status = 'Already exists';
+            conflict = true;
+        } else if (readyCount >= availableSlots) {
+            status = 'Tab limit';
+            conflict = true;
+        } else {
+            readyCount += 1;
+        }
+        return {
+            name: tab.name,
+            protected: isEncryptedTab(tab),
+            size: backupTabSize(tab),
+            status,
+            conflict
+        };
+    });
+    return { preview, readyCount };
+}
+
 async function importBackupFile(file) {
     if (!file) return;
     if (file.size > MAX_BACKUP_BYTES) {
@@ -805,11 +1131,18 @@ async function importBackupFile(file) {
     }
 
     const importedTabs = backup.state.tabs.filter((tab) => !isInbox(tab));
+    const { preview, readyCount } = buildImportPreview(backup.state);
     const choice = await openModal({
         title: 'Import backup',
-        message: `This backup contains ${importedTabs.length} saved ${importedTabs.length === 1 ? 'tab' : 'tabs'}. Merge it with this device or replace all current tabs.`,
+        message: `Review ${importedTabs.length} saved ${importedTabs.length === 1 ? 'tab' : 'tabs'} before choosing how to import them. Conflicts are skipped when merging.`,
+        preview,
         options: [
-            { label: 'Merge with current tabs', value: 'merge' },
+            {
+                label: `Merge ${readyCount} available ${readyCount === 1 ? 'tab' : 'tabs'}`,
+                value: 'merge',
+                disabled: readyCount === 0,
+                title: readyCount === 0 ? 'No tabs can be merged' : ''
+            },
             { label: 'Replace current tabs', value: 'replace' }
         ]
     });
@@ -898,6 +1231,16 @@ async function downloadActiveText() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+textarea.addEventListener('keydown', (event) => {
+    if (findBar.hidden) return;
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        navigateSearch(event.shiftKey ? -1 : 1);
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeFind();
+    }
+});
 textarea.addEventListener('beforeinput', (event) => {
     if (!event.inputType.startsWith('insert')) return;
     let insertedText = event.dataTransfer?.getData('text/plain');
@@ -929,10 +1272,20 @@ textarea.addEventListener('input', () => {
     saveRevision += 1;
     setSaveStatus('saving');
     updateTextNumber();
-    updateLineNumbers();
+    showApproachingLimitWarning();
+    if (!findBar.hidden) updateSearchResults(false);
+    updateLineNumbersImmediately();
+    scheduleLineNumberUpdate();
     scheduleSave();
 });
-textarea.addEventListener('scroll', () => { lineNumbers.scrollTop = textarea.scrollTop; });
+textarea.addEventListener('scroll', () => {
+    lineNumbers.scrollTop = textarea.scrollTop;
+    if (lineScrollFrame) return;
+    lineScrollFrame = requestAnimationFrame(() => {
+        lineScrollFrame = undefined;
+        renderVisibleLineNumbers();
+    });
+});
 addTabButton.addEventListener('click', addTab);
 copyButton.addEventListener('click', copyActiveText);
 saveButton.addEventListener('click', downloadActiveText);
@@ -940,6 +1293,7 @@ themeToggle.addEventListener('click', toggleTheme);
 protectTabButton.addEventListener('click', () => securityAction(getActiveTab().id));
 renameTabButton.addEventListener('click', () => renameTab(getActiveTab().id));
 deleteTabButton.addEventListener('click', () => deleteTab(getActiveTab().id));
+findInTabButton.addEventListener('click', openFind);
 overflowToggle.addEventListener('click', (event) => {
     event.stopPropagation();
     toggleOverflowMenu();
@@ -961,8 +1315,27 @@ backupFileInput.addEventListener('change', () => {
         showToast('Import failed');
     });
 });
+findInput.addEventListener('input', () => updateSearchResults());
+findInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        navigateSearch(event.shiftKey ? -1 : 1);
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeFind();
+    }
+});
+findPreviousButton.addEventListener('click', () => navigateSearch(-1));
+findNextButton.addEventListener('click', () => navigateSearch(1));
+findCloseButton.addEventListener('click', () => closeFind());
 document.addEventListener('click', () => closeOverflowMenu());
 document.addEventListener('keydown', (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && modalBackdrop.hidden) {
+        event.preventDefault();
+        openFind();
+        return;
+    }
     if (event.key === 'Escape' && !overflowMenu.hidden) {
         event.preventDefault();
         closeOverflowMenu({ returnFocus: true });
@@ -986,6 +1359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await loadTheme();
         state = await getOrMigrateState();
+        initializeSortableTabs();
         await displayActiveTab();
         textarea.scrollTop = textarea.scrollHeight;
         document.fonts?.ready.then(() => updateLineNumbers());
