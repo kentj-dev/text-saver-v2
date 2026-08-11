@@ -23,6 +23,7 @@
   --overlay: rgba(0, 0, 0, 0.72);
   --modal-shadow: rgba(0, 0, 0, 0.6);
   --selection: #315f87;
+  --tour-highlight: #ffb347;
   --icon-filter: invert(1);
 }
 
@@ -190,6 +191,125 @@ body {
 .overflow-item:focus-visible {
   outline: none;
   background: var(--hover);
+}
+
+.tab-context-menu {
+  position: fixed;
+  z-index: 90;
+  width: 160px;
+  padding: 5px;
+  border: 1px solid var(--border-hover);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px var(--modal-shadow);
+}
+
+.tab-context-menu[hidden] {
+  display: none;
+}
+
+.tab-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: 12px monsterrat;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tab-context-item:hover,
+.tab-context-item:focus-visible {
+  outline: none;
+  background: var(--hover);
+}
+
+.tab-context-item:disabled {
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+
+.tab-context-danger:not(:disabled) {
+  color: var(--danger);
+}
+
+.tab-context-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  filter: var(--icon-filter);
+  pointer-events: none;
+}
+
+.driver-popover.text-saver-tour {
+  min-width: 230px;
+  max-width: 270px;
+  border: 1px solid var(--border-hover);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: monsterrat;
+  box-shadow: 0 10px 30px var(--modal-shadow);
+}
+
+:root[data-theme='dark'] .driver-active-element {
+  outline: 2px solid var(--tour-highlight) !important;
+  outline-offset: 2px;
+}
+
+.text-saver-tour .driver-popover-title {
+  font-size: 16px;
+}
+
+.text-saver-tour .driver-popover-description {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.text-saver-tour .driver-popover-progress-text {
+  color: var(--text-subtle);
+}
+
+.text-saver-tour .driver-popover-close-btn {
+  color: var(--text-subtle);
+}
+
+.text-saver-tour .driver-popover-close-btn:hover,
+.text-saver-tour .driver-popover-close-btn:focus {
+  color: var(--text);
+}
+
+.text-saver-tour .driver-popover-footer-btn {
+  border-color: var(--border-hover);
+  background: var(--surface-muted);
+  color: var(--text);
+  font-family: monsterrat;
+}
+
+.text-saver-tour .driver-popover-footer-btn:hover,
+.text-saver-tour .driver-popover-footer-btn:focus {
+  background: var(--hover);
+}
+
+.text-saver-tour.driver-popover-side-left .driver-popover-arrow {
+  border-left-color: var(--surface);
+}
+
+.text-saver-tour.driver-popover-side-right .driver-popover-arrow {
+  border-right-color: var(--surface);
+}
+
+.text-saver-tour.driver-popover-side-top .driver-popover-arrow {
+  border-top-color: var(--surface);
+}
+
+.text-saver-tour.driver-popover-side-bottom .driver-popover-arrow {
+  border-bottom-color: var(--surface);
 }
 
 .header-action {

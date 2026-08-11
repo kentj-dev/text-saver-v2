@@ -5,6 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Format Saver by Kent J.</title>
+    <link rel="stylesheet" type="text/css" href="static/js/driverjs/driver.css" />
     <link rel="stylesheet" type="text/css" href="static/css/popup.css" />
   </head>
   <body>
@@ -60,6 +61,10 @@
                 <img class="icon" src="static/svgs/ellipses.svg" alt="" aria-hidden="true" />
               </button>
               <div id="overflow-menu" class="overflow-menu" role="menu" hidden>
+                <button id="start-guide" class="overflow-item" type="button" role="menuitem">
+                  <img class="overflow-icon" src="static/svgs/shapes.svg" alt="" aria-hidden="true" />
+                  Guide
+                </button>
                 <button id="export-backup" class="overflow-item" type="button" role="menuitem">
                   <img class="overflow-icon" src="static/svgs/export.svg" alt="" aria-hidden="true" />
                   Export backup
@@ -175,6 +180,21 @@
       </section>
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="tab-context-menu" class="tab-context-menu" role="menu" hidden>
+      <button id="context-settings" class="tab-context-item" type="button" role="menuitem">
+        <img class="tab-context-icon" src="static/svgs/settings.svg" alt="" aria-hidden="true" />
+        Rename
+      </button>
+      <button id="context-security" class="tab-context-item" type="button" role="menuitem">
+        <img id="context-security-icon" class="tab-context-icon" src="static/svgs/lock.svg" alt="" aria-hidden="true" />
+        <span id="context-security-label">Set password</span>
+      </button>
+      <button id="context-delete" class="tab-context-item tab-context-danger" type="button" role="menuitem">
+        <img class="tab-context-icon" src="static/svgs/trash.svg" alt="" aria-hidden="true" />
+        Delete tab
+      </button>
+    </div>
+    <script src="static/js/driverjs/driver.js.iife.js"></script>
     <script defer type="module" src="static/js/popup.js"></script>
   </body>
 </html>
